@@ -10,7 +10,7 @@ import threading
 
 from game.browser import GameBrowser
 from game.game_state import GameState
-from game.automation import Automation, UiState, JOIN_GAME, END_GAME
+from game.automation import Automation, JOIN_GAME, END_GAME
 import mitm
 import proxinject
 import liqi
@@ -354,7 +354,7 @@ class BotManager:
             try:
                 liqimsg = self.liqi_parser.parse(msg.content)
             except Exception as e:
-                LOGGER.warning("Failed to parse liqi msg: %s\nError: %s", msg.content, e)
+                LOGGER.debug("Failed to parse liqi msg: %s\nError: %s", msg.content, e)
                 return
             liqi_id = liqimsg.get("id")
             liqi_type = liqimsg.get('type')

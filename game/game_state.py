@@ -601,10 +601,10 @@ class GameState:
                 return None
         try:
             if len(self.mjai_pending_input_msgs) == 1:
-                LOGGER.info("Bot in: %s", self.mjai_pending_input_msgs[0])
+                LOGGER.debug("Bot in: %s", self.mjai_pending_input_msgs[0])
                 output_reaction = self.mjai_bot.react(self.mjai_pending_input_msgs[0])
             else:
-                LOGGER.info("Bot in (batch):\n%s", '\n'.join(str(m) for m in self.mjai_pending_input_msgs))
+                LOGGER.debug("Bot in (batch):\n%s", '\n'.join(str(m) for m in self.mjai_pending_input_msgs))
                 output_reaction = self.mjai_bot.react_batch(self.mjai_pending_input_msgs)
         except Exception as e:
             LOGGER.error("Bot react error: %s", e, exc_info=True)
