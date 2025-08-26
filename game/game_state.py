@@ -56,8 +56,6 @@ class GameState:
             bot (Bot): Bot implemetation"""
 
         self.mjai_bot:Bot = bot         # mjai bot for generating reactions
-        if self.mjai_bot is None:
-            raise ValueError("Bot is None")
         self.mjai_pending_input_msgs = []   # input msgs to be fed into bot
         self.game_mode:GameMode = None      # Game mode
         
@@ -258,7 +256,8 @@ class GameState:
         LOGGER.info("Game Mode: %s", self.game_mode.name)
         
         self.seat = seatList.index(self.account_id)
-        self.mjai_bot.init_bot(self.seat, self.game_mode)
+        if self.mjai_bot is not None:
+            self.mjai_bot.init_bot(self.seat, self.game_mode)
         # Start_game has no effect for mjai bot, omit here
         self.mjai_pending_input_msgs.append(
             {
@@ -599,6 +598,9 @@ class GameState:
         if data: 
             if 'operation' not in data or 'operationList' not in data['operation'] or len(data['operation']['operationList']) == 0:
                 return None
+        if self.mjai_bot is None:
+            return None
+        
         try:
             if len(self.mjai_pending_input_msgs) == 1:
                 LOGGER.debug("Bot in: %s", self.mjai_pending_input_msgs[0])
@@ -620,5 +622,5 @@ class GameState:
             else:
                 is_3p = False
                 
-            reaction_convert_meta(output_reaction,is_3p)
+            reaction_convert_meta(output_reaction, is_3p)
             return output_reaction
