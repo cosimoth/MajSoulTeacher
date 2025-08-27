@@ -8,10 +8,11 @@ from liqi import MsgType
 from liqi import LiqiProto, LiqiMethod, LiqiAction
 
 import common.mj_helper as mj_helper
-from common.mj_helper import MjaiType, GameInfo, MJAI_WINDS, ChiPengGang, MSGangType
+from common.mj_helper import MjaiType, GameInfo, KyokuInfo, MJAI_WINDS, ChiPengGang, MSGangType
 from common.log_helper import LOGGER
 from common.utils import GameMode
 from bot import Bot, reaction_convert_meta
+from llm import reasoning
 
 NO_EFFECT_METHODS = [
     '.lq.NotifyPlayerLoadGameReady',        # Notify: the game starts
@@ -46,6 +47,8 @@ class KyokuState:
         self.first_round:bool = True        # flag marking if it is the first move in new round
         self.self_in_reach:bool = False     # if self is in reach state
         self.player_reach:list = [False]*4  # list of player reach states
+
+        self.kyoku_info = KyokuInfo()
 
 class GameState:
     """ Stores Majsoul game state and processes inputs outputs to/from Bot"""
@@ -586,7 +589,23 @@ class GameState:
     
     def ms_template(self, liqi_data:dict) -> dict:
         """ template"""
-            
+    
+    def _update_kyoku_snapshot(self):
+        # https://github.com/Cryolite/mjai
+        for op in self.mjai_pending_input_msgs:
+            if op['type'] == MjaiType.DAHAI:
+                self.kyoku_state.kyoku_info.discarded[op['actor']].append(op['pai'])
+            elif op['type'] in [MjaiType.CHI, MjaiType.PON, MjaiType.DAIMINKAN]:
+                melded = op['consumed'] + [op['pai']]
+                self.kyoku_state.kyoku_info.melded[op['actor']].append(melded)
+            elif op['type'] == MjaiType.KAKAN:
+                self.kyoku_state.kyoku_info.melded[op['actor']].remove([op['pai']]*3)
+                self.kyoku_state.kyoku_info.melded[op['actor']].append([op['pai']]*4)
+            elif op['type'] == MjaiType.ANKAN:
+                self.kyoku_state.kyoku_info.melded[op['actor']].append([op['pai']]*4)
+            elif op['type'] == MjaiType.NUKIDORA:
+                self.kyoku_state.kyoku_info.melded[op['actor']].append(['N'])
+
     def _react_all(self, data=None) -> dict | None:
         """ Feed all pending messages to AI bot and get bot reaction
         ref: https://mjai.app/docs/mjai-protocol
@@ -598,19 +617,20 @@ class GameState:
         if data: 
             if 'operation' not in data or 'operationList' not in data['operation'] or len(data['operation']['operationList']) == 0:
                 return None
-        if self.mjai_bot is None:
-            return None
-        
-        try:
-            if len(self.mjai_pending_input_msgs) == 1:
-                LOGGER.debug("Bot in: %s", self.mjai_pending_input_msgs[0])
-                output_reaction = self.mjai_bot.react(self.mjai_pending_input_msgs[0])
-            else:
-                LOGGER.debug("Bot in (batch):\n%s", '\n'.join(str(m) for m in self.mjai_pending_input_msgs))
-                output_reaction = self.mjai_bot.react_batch(self.mjai_pending_input_msgs)
-        except Exception as e:
-            LOGGER.error("Bot react error: %s", e, exc_info=True)
-            output_reaction = None
+            
+        if self.mjai_bot is not None:        
+            try:
+                if len(self.mjai_pending_input_msgs) == 1:
+                    LOGGER.debug("Bot in: %s", self.mjai_pending_input_msgs[0])
+                    output_reaction = self.mjai_bot.react(self.mjai_pending_input_msgs[0])
+                else:
+                    LOGGER.debug("Bot in (batch):\n%s", '\n'.join(str(m) for m in self.mjai_pending_input_msgs))
+                    output_reaction = self.mjai_bot.react_batch(self.mjai_pending_input_msgs)
+            except Exception as e:
+                LOGGER.error("Bot react error: %s", e, exc_info=True)
+                output_reaction = None
+
+        self._update_kyoku_snapshot()
         self.mjai_pending_input_msgs = [] # clear intput queue
         
         if output_reaction is None:
@@ -621,6 +641,11 @@ class GameState:
                 is_3p = True
             else:
                 is_3p = False
-                
+            explanation = reasoning.explain(
+                self.get_game_info(),
+                self.kyoku_state.kyoku_info,
+                output_reaction,
+                is_3p)
+            LOGGER.info("AI 解释: %s", explanation)
             reaction_convert_meta(output_reaction, is_3p)
             return output_reaction
