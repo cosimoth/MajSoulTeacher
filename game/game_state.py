@@ -648,4 +648,5 @@ class GameState:
                 is_3p)
             LOGGER.info("AI 解释: %s", explanation)
             reaction_convert_meta(output_reaction, is_3p)
+            output_reaction['explanation'] = explanation
             return output_reaction

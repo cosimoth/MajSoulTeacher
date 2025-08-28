@@ -318,10 +318,11 @@ class MainGUI(tk.Tk):
         # Update AI guide from Reaction
         pending_reaction = self.bot_manager.get_pending_reaction()
         if pending_reaction:
-            ai_guide_str, options = mjai_reaction_2_guide(pending_reaction, 3, self.st.lan())
+            ai_guide_str, options, explanation = mjai_reaction_2_guide(pending_reaction, 3, self.st.lan())
             ai_guide_str += '\n'
             for tile_str, weight in options:
                 ai_guide_str += f" {tile_str:8}  {weight*100:4.0f}%\n"
+            ai_guide_str += f"说明: {explanation}\n"
             self.ai_guide_var.set(ai_guide_str)
         else:
             self.ai_guide_var.set("")

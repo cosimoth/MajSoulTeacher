@@ -443,8 +443,8 @@ class BotManager:
         # Update overlay guide given pending reaction
         reaction = self.get_pending_reaction()
         if reaction:
-            guide, options = mjai_reaction_2_guide(reaction, 3, self.st.lan())
-            self.browser.overlay_update_guidance(guide, self.st.lan().OPTIONS_TITLE, options)
+            guide, options, explanation = mjai_reaction_2_guide(reaction, 3, self.st.lan())
+            self.browser.overlay_update_guidance(guide, self.st.lan().OPTIONS_TITLE, options, explanation)
         else:
             self.browser.overlay_clear_guidance()
             
@@ -500,7 +500,7 @@ class BotManager:
             LOGGER.error("Failed to automate action for %s: %s", reaction['type'], e, exc_info=True)
 
 
-def mjai_reaction_2_guide(reaction:dict, max_options:int=3, lan_str:LanStr=LanStr()) -> tuple[str, list]:
+def mjai_reaction_2_guide(reaction:dict, max_options:int=3, lan_str:LanStr=LanStr()) -> tuple[str, list, str]:
     """ Convert mjai reaction message to language specific AI guide 
     params:
         reaction(dict): reaction (output) message from mjai bot
@@ -508,11 +508,12 @@ def mjai_reaction_2_guide(reaction:dict, max_options:int=3, lan_str:LanStr=LanSt
         lan_str(LanString): language specific string constants
         
     return:
-        (action_str, options): action_str is the recommended action
-        options is a list of options (str, float), each option being a tuple of tile str and a percentage number 
-        
+        (action_str, options, explanation): action_str is the recommended action
+        options is a list of options (str, float), each option being a tuple of tile str and a percentage number
+        explanation is a string explaining the action
+
         sample output for Chinese:
-        ("立直,切[西]", [("[西]", 0.9111111), ("立直", 0.077777), ("[一索]", 0.0055555)])        
+        ("立直,切[西]", [("[西]", 0.9111111), ("立直", 0.077777), ("[一索]", 0.0055555)], "推荐的操作是立直，切掉[西]，因为它的概率最高。")
         """
                 
     if reaction is None:
@@ -544,7 +545,7 @@ def mjai_reaction_2_guide(reaction:dict, max_options:int=3, lan_str:LanStr=LanSt
         action_str = f"{ActionUnicode.KAN}{lan_str.KAN}{tile_str}({lan_str.ANKAN})"
     elif re_type == MjaiType.REACH: # attach reach dahai options
         reach_dahai_reaction = reaction['reach_dahai']
-        dahai_action_str, _dahai_options = mjai_reaction_2_guide(reach_dahai_reaction, 0, lan_str)
+        dahai_action_str, _dahai_options, _ = mjai_reaction_2_guide(reach_dahai_reaction, 0, lan_str)
         action_str = f"{ActionUnicode.REACH}{lan_str.RIICHI}," + dahai_action_str
     elif re_type == MjaiType.HORA:
         if reaction['actor'] == reaction['target']:
@@ -572,5 +573,5 @@ def mjai_reaction_2_guide(reaction:dict, max_options:int=3, lan_str:LanStr=LanSt
                 else:
                     name_str = lan_str.mjai2str(code)                
                 options.append((name_str, q))
-        
-    return (action_str, options)
+    explanation = reaction.get('explanation', '')
+    return (action_str, options, explanation)

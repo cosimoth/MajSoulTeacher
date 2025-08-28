@@ -258,7 +258,7 @@ def explain(game_info, kyoku_info, ai_recommendation: dict, is_3p: bool = False,
     # Short header
     lines = []
     lines.append('你是一个专业的日本麻将高手，擅长分析和解读麻将游戏中的策略和技巧。')
-    lines.append('请基于下列牌局快照和AI推荐，简明扼要地解释AI给出概率的原因，并给出是否采纳的建议（中文回答）。')
+    lines.append('请基于下列牌局快照和AI推荐，简明扼要地解释AI给出概率的原因。')
     lines.append('')
     header = f'场风: {bakaze_cn}{kyoku}局；本场: {honba}本；供托: {kyotaku}；庄家: {oya+1 if oya is not None else "未知"}位；宝牌: {mjai_to_natural(dora_marker)}。'
     lines.append(header)
@@ -349,11 +349,9 @@ def explain(game_info, kyoku_info, ai_recommendation: dict, is_3p: bool = False,
 
     # Instructions for the LLM (concise)
     lines.append('')
-    lines.append('请回答（简洁，中文）:')
-    lines.append('1) 简述 AI 推荐（每项 1-2 句，说明主要原因，如：进张/改良/期待值/安全等）。')
-    lines.append('2) 列出该推荐的主要优点与潜在风险（重点说明何时会失败）。')
-    lines.append('3) 提出 1-2 个替代动作并简短比较优劣（各 1-2 句）。')
-    lines.append('4) 最后用一句话给出是否采纳及主要理由（尽量简短）。')
+    lines.append('请用简洁的中文输出:')
+    lines.append('牌姿和方向：结合我的手排和当前场上的信息，简述当前我的牌姿和方向（1-2句）')
+    lines.append('选项解释：针对 AI 提供的选项，解释其背后的原因，每项 1-2 句。解释其主要考虑原因，如：进张/改良/期待值/安全等。')
 
     prompt = '\n'.join(lines)
     LOGGER.info("生成的提示语: %s", prompt)
