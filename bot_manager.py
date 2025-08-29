@@ -485,7 +485,7 @@ class BotManager:
         else:
             line = '🟢' + self.st.lan().READY_FOR_GAME            
         
-        text = '\n'.join((text, model_text, autoplay_text, line))       
+        text = '\n'.join((model_text, autoplay_text, line))       
         self.browser.overlay_update_botleft(text)
 
     

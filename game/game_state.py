@@ -599,10 +599,10 @@ class GameState:
                 melded = op['consumed'] + [op['pai']]
                 self.kyoku_state.kyoku_info.melded[op['actor']].append(melded)
             elif op['type'] == MjaiType.KAKAN:
-                self.kyoku_state.kyoku_info.melded[op['actor']].remove([op['pai']]*3)
+                self.kyoku_state.kyoku_info.melded[op['actor']].remove(op['consumed'])
                 self.kyoku_state.kyoku_info.melded[op['actor']].append([op['pai']]*4)
             elif op['type'] == MjaiType.ANKAN:
-                self.kyoku_state.kyoku_info.melded[op['actor']].append([op['pai']]*4)
+                self.kyoku_state.kyoku_info.melded[op['actor']].append(op['consumed'])
             elif op['type'] == MjaiType.NUKIDORA:
                 self.kyoku_state.kyoku_info.melded[op['actor']].append(['N'])
 
