@@ -24,6 +24,10 @@ ACTION_NL = {
     'zimo': '自摸', 'hora': '和了', 'ryukyoku': '流局', 'nukidora': '抜きドラ', 'none': '过'
 }
 
+ACTION_NL_ADV = {
+    -3: '下家', -2: '对家', -1: '上家', 0: '自己', 1: '下家', 2: '对家', 3: '上家'  # for 4-player, wrap around
+}
+
 
 def mjai_to_natural(tile: str) -> str:
     """Convert a single MJAI tile code to Chinese natural language.
@@ -32,7 +36,15 @@ def mjai_to_natural(tile: str) -> str:
     return MJAI_TILE_2_NL.get(tile, tile)
 
 
-def tile_list_to_nl(tiles) -> str:
+def tile_list_to_nl(tiles, tile_types) -> str:
+    if not tiles:
+        return '无'
+    try:
+        return '、'.join(f"{tile_types[i]}{mjai_to_natural(t)}" for i, t in enumerate(tiles))
+    except Exception:
+        return str(tiles)
+
+def tile_list_to_nl_me(tiles) -> str:
     if not tiles:
         return '无'
     try:
@@ -40,16 +52,15 @@ def tile_list_to_nl(tiles) -> str:
     except Exception:
         return str(tiles)
 
-
-def melds_to_nl(melds) -> str:
+def melds_to_nl(melds, melds_types) -> str:
     """Format melds (副露) into NL. Each meld can be a list of tile codes or a string.
     """
     if not melds:
         return '无'
     out = []
-    for meld in melds:
+    for j, meld in enumerate(melds):
         if isinstance(meld, (list, tuple)):
-            out.append('[' + '、'.join(mjai_to_natural(t) for t in meld) + ']')
+            out.append(f"[{melds_types[j]}: " + '、'.join(f"{mjai_to_natural(t)}" for t in meld) + ']')
         else:
             out.append(str(meld))
     return '，'.join(out)
@@ -191,6 +202,45 @@ def action_to_nl(act) -> str:
 
     return str(act)
 
+def disc_type_to_nl(discard_type) -> str:
+    """Convert discard type list (e.g. [True, False, ...]) to NL string indicating tsumogiri.
+    """
+    if not discard_type:
+        return ''
+    try:
+        parts = []
+        for idx, is_tsumogiri in enumerate(discard_type):
+            if is_tsumogiri:
+                parts.append(f'摸切')
+            else:
+                parts.append(f'手切')
+        return parts
+    except Exception:
+        return str(discard_type)
+    
+def melds_info_to_nl(melds_info) -> str:
+    """Convert melds info list (e.g. [('pon', 'E'), ...]) to NL string.
+    """
+    if not melds_info:
+        return ''
+    try:
+        parts = []
+        for info in melds_info:
+            if isinstance(info, (list, tuple)) and len(info) >= 1:
+                typ = info[0]
+                actor = info[1] if len(info) > 1 else None
+                target = info[2] if len(info) > 2 else None
+                desc = ACTION_NL.get(typ)
+                if target:
+                    parts.append(f'{desc}（来自{ACTION_NL_ADV.get(target - actor)}）')
+                else:
+                    parts.append(desc)
+            else:
+                parts.append(str(info))
+        return parts
+    except Exception:
+        return melds_info
+
 
 def explain(game_info, kyoku_info, ai_recommendation: dict, is_3p: bool = False, top_k: int = 3) -> str:
     """Generate a concise Chinese prompt to ask an LLM to explain an AI recommendation.
@@ -233,6 +283,8 @@ def explain(game_info, kyoku_info, ai_recommendation: dict, is_3p: bool = False,
     # kyoku detail: discarded & melded
     discarded = _get(kyoku_info, 'discarded', None)
     melded = _get(kyoku_info, 'melded', None)
+    discarded_type = _get(kyoku_info, 'discarded_type', None)  # if discard is tsumogiri
+    melded_info = _get(kyoku_info, 'melded_info', None)          # list of (type, target) for each meld
 
     # normalize seat count
     seat_count = 3 if is_3p else 4
@@ -277,8 +329,11 @@ def explain(game_info, kyoku_info, ai_recommendation: dict, is_3p: bool = False,
     lines.append('场上弃牌（按位）:')
     for i in range(seat_count):
         nm = seat_names[i] if i < len(seat_names) else f'第{i+1}位'
-        disc_text = tile_list_to_nl(discarded[i]) if isinstance(discarded, (list, tuple)) and i < len(discarded) else '无'
-        md_text = melds_to_nl(melded[i]) if isinstance(melded, (list, tuple)) and i < len(melded) else '无'
+        dis_types = disc_type_to_nl(discarded_type[i])
+        melds_infos = melds_info_to_nl(melded_info[i])
+        print(melds_infos, melded[i])
+        disc_text = tile_list_to_nl(discarded[i], dis_types) if isinstance(discarded, (list, tuple)) and i < len(discarded) else '无'
+        md_text = melds_to_nl(melded[i], melds_infos) if isinstance(melded, (list, tuple)) and i < len(melded) else '无'
         reach_flag = ''
         try:
             if isinstance(player_reached, (list, tuple)) and i < len(player_reached) and player_reached[i]:
@@ -289,7 +344,7 @@ def explain(game_info, kyoku_info, ai_recommendation: dict, is_3p: bool = False,
 
     # My hand
     lines.append('')
-    lines.append('我的手牌: ' + (tile_list_to_nl(my_tehai) if my_tehai else '未知'))
+    lines.append('我的手牌: ' + (tile_list_to_nl_me(my_tehai) if my_tehai else '未知'))
     lines.append('我摸到: ' + (mjai_to_natural(my_tsumohai) if my_tsumohai else '无'))
 
     # AI recommendation parsing
