@@ -68,7 +68,8 @@ class GameState:
         self.seat = 0                           # seat index
         #seat 0 is chiicha (起家; first dealer; first East)
         #1-2-3 then goes counter-clockwise        
-        self.player_scores:list = None          # player scores        
+        self.player_scores:list = None          # player scores
+        print("scores:", self.player_scores)        
         self.kyoku_state:KyokuState = KyokuState()  # kyoku info - cleared every newround        
         
         ### about last reaction
@@ -274,6 +275,12 @@ class GameState:
     def ms_new_round(self, liqi_data:dict) -> dict:
         """ Start kyoku """
         self.kyoku_state = KyokuState()
+        # clear kyoku info of last round
+        self.kyoku_state.kyoku_info = KyokuInfo()
+        print("new round")
+        print(self.kyoku_state.kyoku_info.discarded)
+        print(self.kyoku_state.kyoku_info.melded)
+        print(self.kyoku_state.kyoku_info.scores)
         self.mjai_pending_input_msgs = []
 
         liqi_data_data = liqi_data['data']
@@ -595,9 +602,11 @@ class GameState:
         for op in self.mjai_pending_input_msgs:
             if op['type'] == MjaiType.DAHAI:
                 self.kyoku_state.kyoku_info.discarded[op['actor']].append(op['pai'])
+                self.kyoku_state.kyoku_info.discarded_type[op['actor']].append(op['tsumogiri'])
             elif op['type'] in [MjaiType.CHI, MjaiType.PON, MjaiType.DAIMINKAN]:
                 melded = op['consumed'] + [op['pai']]
                 self.kyoku_state.kyoku_info.melded[op['actor']].append(melded)
+                self.kyoku_state.kyoku_info.melded_info[op['actor']].append((op['type'], op['actor'], op['target']))
             elif op['type'] == MjaiType.KAKAN:
                 self.kyoku_state.kyoku_info.melded[op['actor']].remove(op['consumed'])
                 self.kyoku_state.kyoku_info.melded[op['actor']].append([op['pai']]*4)
@@ -605,6 +614,7 @@ class GameState:
                 self.kyoku_state.kyoku_info.melded[op['actor']].append(op['consumed'])
             elif op['type'] == MjaiType.NUKIDORA:
                 self.kyoku_state.kyoku_info.melded[op['actor']].append(['N'])
+        self.kyoku_state.kyoku_info.scores = self.player_scores
 
     def _react_all(self, data=None) -> dict | None:
         """ Feed all pending messages to AI bot and get bot reaction
