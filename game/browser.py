@@ -270,15 +270,17 @@ class GameBrowser:
         """ Queue action: Stop showing the overlay"""
         self._action_queue.put(self._action_stop_overlay)
 
-    def overlay_update_guidance(self, guide_str:str, option_subtitle:str, options:list):
+    def overlay_update_guidance(self, guide_str:str, option_subtitle:str, options:list, explanation:str):
         """ Queue action: update text area
         params:
             guide_str(str): AI guide str (recommendation action)
             option_subtitle(str): subtitle for options (display before option list)
-            options(list): list of (str, float), indicating action/tile with its probability """
+            options(list): list of (str, float), indicating action/tile with its probability
+            explanation(str): explanation for the recommendation
+        """
         if self._last_guide == (guide_str, option_subtitle, options):  # skip if same guide
             return
-        self._action_queue.put(lambda: self._action_overlay_update_guide(guide_str, option_subtitle, options))
+        self._action_queue.put(lambda: self._action_overlay_update_guide(guide_str, option_subtitle, options, explanation))
 
     def overlay_clear_guidance(self):
         """ Queue action: clear overlay text area"""
@@ -394,15 +396,24 @@ class GameBrowser:
         box_left = int(self.width * 0.14)  # Distance from the left
         return (font_size, line_space, min_box_width, initial_box_height, box_top, box_left)
 
-    def _action_overlay_update_guide(self, line1: str, option_title: str, options: list[tuple[str, float]]):
+    def _action_overlay_update_guide(self, line1: str, option_title: str, options: list[tuple[str, float]], explanation: str):
         if not self.is_overlay_working():
             return
 
         font_size, line_space, min_box_width, initial_box_height, box_top, box_left = self._overlay_text_params()
         if options:
-            options_data = [[text, f"{perc*100:4.0f}%"] for text, perc in options]
+            # escape option text for safe JS string interpolation
+            options_data = [[str(text).replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n'), f"{perc*100:4.0f}%"] for text, perc in options]
         else:
             options_data = []
+
+        # Escape strings for embedding into JS source
+        js_line1 = line1.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n') if line1 else ''
+        js_option_title = option_title.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n') if option_title else ''
+        js_explanation = explanation.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n') if explanation else ''
+
+        # Slightly smaller font for explanation
+        explanation_font_size = max(int(font_size * 0.9), 12)
 
         js_code = f"""
         (() => {{
@@ -411,44 +422,119 @@ class GameBrowser:
                 return;
             }}
             const ctx = canvas.getContext('2d');
+            ctx.textBaseline = 'top';
 
-            // Measure the first line of text to determine box width
+            // Measure title to determine minimal width
             ctx.font = "{font_size * 2}px Arial";
-            const firstLineMetrics = ctx.measureText("{line1}");
-            let box_width = Math.max(firstLineMetrics.width + {font_size}*2, {min_box_width}); // set minimal width
-            let box_height = {initial_box_height}; // Pre-defined box height based on number of lines
-            
-            // Clear the drawing area
-            ctx.clearRect({box_left}, {box_top}, {self.width}-{box_left}, {initial_box_height});            
-            // Draw the semi-transparent background box
-            ctx.clearRect({box_left}, {box_top}, box_width, box_height);
+            const titleWidth = ctx.measureText("{js_line1}").width;
+            let box_width = Math.max(titleWidth + {font_size}*2, {min_box_width});
+
+            // Measure options and percentages and expand width if needed
+            ctx.font = "{font_size}px Arial";
+            const options = {options_data};
+            for (let i = 0; i < options.length; i++) {{
+                const opt = options[i];
+                const optText = opt[0];
+                const optPerc = opt[1];
+                const wText = ctx.measureText(optText).width;
+                const wPerc = ctx.measureText(optPerc).width;
+                const candidate = wText + wPerc + {font_size}*6; // padding for both sides and gap
+                if (candidate > box_width) {{
+                    box_width = candidate;
+                }}
+            }}
+
+            // Ensure box width not larger than canvas
+            const maxBoxWidth = canvas.width - {box_left} - {font_size}*2;
+            if (box_width > maxBoxWidth) {{
+                box_width = maxBoxWidth;
+            }}
+
+            const pad = {font_size} * 2;
+            const textMaxWidth = box_width - pad*2;
+
+            // Wrap explanation into lines based on available width
+            const explanation = "{js_explanation}";
+            const explLines = [];
+            if (explanation) {{
+                ctx.font = "{explanation_font_size}px Arial";
+                const paras = explanation.split('\\n');
+                paras.forEach(para => {{
+                    if (!para) {{
+                        explLines.push('');
+                        return;
+                    }}
+                    const words = para.split(' ');
+                    let line = '';
+                    for (let wi = 0; wi < words.length; wi++) {{
+                        const w = words[wi];
+                        const testLine = line ? (line + ' ' + w) : w;
+                        if (ctx.measureText(testLine).width > textMaxWidth && line) {{
+                            explLines.push(line);
+                            line = w;
+                        }} else {{
+                            line = testLine;
+                        }}
+                    }}
+                    if (line) explLines.push(line);
+                }});
+            }}
+
+            // Compute content height based on counted lines
+            let contentHeight = {font_size * 2} + {line_space} * 4; // title area
+            contentHeight += {font_size} + {line_space}; // option subtitle
+            contentHeight += options.length * ({font_size} + {line_space}); // each option line
+            if (explLines.length > 0) {{
+                contentHeight += {line_space}; // spacing before explanation
+                contentHeight += explLines.length * ({explanation_font_size} + {line_space});
+            }}
+            let box_height = Math.max(contentHeight + {line_space}*2, {initial_box_height});
+
+            // Clear previous area using previous stored height so we don't leave artifacts
+            const prevHeight = parseInt(canvas.dataset._guideBoxHeight || '0', 10);
+            const clearHeight = Math.max(prevHeight, box_height, {initial_box_height});
+            ctx.clearRect({box_left}, {box_top}, canvas.width - {box_left}, clearHeight);
+
+            // Draw the semi-transparent background box and store its size
             ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
             ctx.fillRect({box_left}, {box_top}, box_width, box_height);
+            canvas.dataset._guideBoxHeight = String(box_height);
+            canvas.dataset._guideBoxWidth = String(box_width);
 
-            // Reset font to draw the first line
+            // Draw the texts: title, options, and explanation
             ctx.fillStyle = "#FFFFFF";
-            ctx.textBaseline = "top";
-            ctx.fillText("{line1}", {box_left} + {font_size}, {box_top} + {line_space} * 2);
+            ctx.font = "{font_size * 2}px Arial";
+            ctx.fillText("{js_line1}", {box_left} + pad, {box_top} + {line_space} * 2);
 
-            // Adjust y-position for the subtitle and option lines
             let yPos = {box_top} + {font_size * 2} + {line_space} * 4; // Position after the first line
             ctx.font = "{font_size}px Arial"; // Font size for options subtitle and lines
-            
+
             // Draw options subtitle
-            ctx.fillText("{option_title}", {box_left} + {font_size}*2, yPos);
+            ctx.fillText("{js_option_title}", {box_left} + pad, yPos);
             yPos += {font_size} + {line_space}; // Adjust yPos for option lines
 
             // Draw each option line
-            const options = {options_data};
             options.forEach(option => {{
                 const [text, perc] = option;
-                ctx.fillText(text, {box_left} + {font_size}*2, yPos); // Draw option text
-                // Calculate right-aligned percentage position and draw
+                ctx.fillText(text, {box_left} + pad, yPos); // Draw option text
+                // Draw percentage right-aligned within the box
                 const percWidth = ctx.measureText(perc).width;
-                ctx.fillText(perc, {box_left} + {font_size}*11, yPos);
+                ctx.fillText(perc, {box_left} + box_width - pad - percWidth, yPos);
                 yPos += {font_size} + {line_space}; // Adjust yPos for the next line
             }});
-        }})();"""
+
+            // Draw explanation lines
+            if (explLines.length > 0) {{
+                yPos += {line_space};
+                ctx.font = "{explanation_font_size}px Arial";
+                for (let i = 0; i < explLines.length; i++) {{
+                    ctx.fillText(explLines[i], {box_left} + pad, yPos);
+                    yPos += {explanation_font_size} + {line_space};
+                }}
+            }}
+
+        }})();
+        """
         self.page.evaluate(js_code)
         self._last_guide = (line1, option_title, options)
 
@@ -464,10 +550,14 @@ class GameBrowser:
                 return;
             }}
             const ctx = canvas.getContext('2d');
-
-            // Clear the drawing area
-            ctx.clearRect({box_left}, {box_top}, {self.width}-{box_left}, {initial_box_height});
-        }});"""
+            const prevHeight = parseInt(canvas.dataset._guideBoxHeight || '{initial_box_height}', 10);
+            const prevWidth = parseInt(canvas.dataset._guideBoxWidth || '{self.width - box_left}', 10);
+            // Clear the previously drawn area (width up to previous box width or full available width)
+            ctx.clearRect({box_left}, {box_top}, Math.max(prevWidth, {self.width} - {box_left}), prevHeight);
+            // Remove stored sizes
+            delete canvas.dataset._guideBoxHeight;
+            delete canvas.dataset._guideBoxWidth;
+        }})();"""
         self.page.evaluate(js_code)
         self._last_guide = None
 
@@ -476,10 +566,10 @@ class GameBrowser:
             return
 
         font_size = int(self.height/48)
-        box_top = 0.885
+        box_top = 0.91
         box_left = 0
-        box_width = 0.115
-        box_height = 1- box_top
+        box_width = 0.10
+        box_height = 1 - box_top
 
         # Escape JavaScript special characters and convert newlines
         js_text = text.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n') if text else ''

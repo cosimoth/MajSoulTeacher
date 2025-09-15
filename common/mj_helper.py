@@ -280,3 +280,11 @@ class GameInfo:
         other_reach.pop(self.self_seat)
         n = sum(1 for r in other_reach if r)
         return n
+
+
+class KyokuInfo:
+    # snapshot for LLM to analyze
+    # Naming: https://mahjong.fandom.com/zh/wiki/%E9%BA%BB%E9%9B%80%E8%A1%93%E8%AA%9E%E4%B8%AD%E6%97%A5%E8%8B%B1%E5%B0%8D%E7%85%A7%E8%A1%A8
+    discarded:list[list[str]] = [[] for _ in range(4)]   # list of discarded tiles
+    melded:list[list[str]] = [[] for _ in range(4)]      # list of melded tiles
+    scores:list[int] = [0]*4                             # player scores
