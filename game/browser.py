@@ -566,10 +566,10 @@ class GameBrowser:
             return
 
         font_size = int(self.height/48)
-        box_top = 0.885
+        box_top = 0.91
         box_left = 0
-        box_width = 0.115
-        box_height = 1- box_top
+        box_width = 0.10
+        box_height = 1 - box_top
 
         # Escape JavaScript special characters and convert newlines
         js_text = text.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n') if text else ''

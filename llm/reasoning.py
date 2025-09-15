@@ -235,7 +235,7 @@ def explain(game_info, kyoku_info, ai_recommendation: dict, is_3p: bool = False,
     melded = _get(kyoku_info, 'melded', None)
 
     # normalize seat count
-    seat_count = 4
+    seat_count = 3 if is_3p else 4
     if scores and isinstance(scores, (list, tuple)):
         seat_count = len(scores)
     elif discarded and isinstance(discarded, (list, tuple)):
@@ -261,6 +261,8 @@ def explain(game_info, kyoku_info, ai_recommendation: dict, is_3p: bool = False,
     lines.append('请基于下列牌局快照和AI推荐，简明扼要地解释AI给出概率的原因。')
     lines.append('')
     header = f'场风: {bakaze_cn}{kyoku}局；本场: {honba}本；供托: {kyotaku}；庄家: {oya+1 if oya is not None else "未知"}位；宝牌: {mjai_to_natural(dora_marker)}。'
+    if is_3p:
+        header += '本局是三人麻将。'
     lines.append(header)
 
     # Scores
@@ -309,7 +311,7 @@ def explain(game_info, kyoku_info, ai_recommendation: dict, is_3p: bool = False,
         return f' ({pv})'
 
     lines.append('')
-    lines.append(f'AI 推荐（前{min(top_k, 2)}项，解析来源: {info_text}）:')
+    lines.append(f'AI 推荐:')
     if options:
         for idx, (act, prob) in enumerate(options[:top_k]):
             lines.append(f'{idx+1}. {action_to_nl(act)}{_fmt_prob(prob)}')
@@ -343,9 +345,9 @@ def explain(game_info, kyoku_info, ai_recommendation: dict, is_3p: bool = False,
                 meta_lines.append('q_values(top3 indices->value): ' + ', '.join(f'{i}->{v:.4f}' for i, v in top_q))
             except Exception:
                 pass
-        if meta_lines:
-            lines.append('')
-            lines.append('AI meta: ' + '；'.join(meta_lines))
+        # if meta_lines:
+        #     lines.append('')
+        #     lines.append('AI meta: ' + '；'.join(meta_lines))
 
     # Instructions for the LLM (concise)
     lines.append('')

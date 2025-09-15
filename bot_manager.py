@@ -521,7 +521,7 @@ def mjai_reaction_2_guide(reaction:dict, max_options:int=3, lan_str:LanStr=LanSt
     re_type = reaction['type']
     
     def get_tile_str(mjai_tile:str):    # unicode + language specific name
-        return MJAI_TILE_2_UNICODE[mjai_tile] + lan_str.mjai2str(mjai_tile)
+        return lan_str.mjai2str(mjai_tile)
     pai = reaction.get('pai', None)
     if pai:
         tile_str =  get_tile_str(pai)
