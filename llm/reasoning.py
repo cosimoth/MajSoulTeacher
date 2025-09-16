@@ -7,14 +7,22 @@ from .openai_llm import llm_client
 MJAI_TILE_2_NL = {
     # Man (万)
     '1m': '一万', '2m': '二万', '3m': '三万', '4m': '四万', '5mr': '红五万', '5m': '五万', '6m': '六万', '7m': '七万', '8m': '八万', '9m': '九万',
-    # Pin (筒)
-    '1p': '一筒', '2p': '二筒', '3p': '三筒', '4p': '四筒', '5pr': '红五筒', '5p': '五筒', '6p': '六筒', '7p': '七筒', '8p': '八筒', '9p': '九筒',
-    # Sou (条)
-    '1s': '一条', '2s': '二条', '3s': '三条', '4s': '四条', '5sr': '红五条', '5s': '五条', '6s': '六条', '7s': '七条', '8s': '八条', '9s': '九条',
+    # Pin (饼)
+    '1p': '一饼', '2p': '二饼', '3p': '三饼', '4p': '四饼', '5pr': '红五饼', '5p': '五饼', '6p': '六饼', '7p': '七饼', '8p': '八饼', '9p': '九饼',
+    # Sou (索)
+    '1s': '一索', '2s': '二索', '3s': '三索', '4s': '四索', '5sr': '红五索', '5s': '五索', '6s': '六索', '7s': '七索', '8s': '八索', '9s': '九索',
     # Winds and dragons
     'E': '东', 'S': '南', 'W': '西', 'N': '北', 'P': '白', 'F': '发', 'C': '中',
     # Misc / placeholders
     '?': '未知'
+}
+
+DORA_DORA_MARKERS = {
+    '1m': '2m', '2m': '3m', '3m': '4m', '4m': '5m', '5m': '6m', '6m': '7m', '7m': '8m', '8m': '9m', '9m': '1m',
+    '1p': '2p', '2p': '3p', '3p': '4p', '4p': '5p', '5p': '6p', '6p': '7p', '7p': '8p', '8p': '9p', '9p': '1p',
+    '1s': '2s', '2s': '3s', '3s': '4s', '4s': '5s', '5s': '6s', '6s': '7s', '7s': '8s', '8s': '9s', '9s': '1s',
+    'E': 'S', 'S': 'W', 'W': 'N', 'N': 'E',
+    'P': 'F', 'F': 'C', 'C': 'P'
 }
 
 # Common action -> NL mapping
@@ -44,13 +52,24 @@ def tile_list_to_nl(tiles, tile_types) -> str:
     except Exception:
         return str(tiles)
 
-def tile_list_to_nl_me(tiles) -> str:
+def tile_list_to_nl_single(tiles) -> str:
     if not tiles:
         return '无'
     try:
         return '、'.join(mjai_to_natural(t) for t in tiles)
     except Exception:
         return str(tiles)
+    
+def get_dora_from_markers(dora_markers) -> list:
+    """Given a list of dora markers, return the corresponding dora tiles."""
+    if not dora_markers:
+        return []
+    dora_tiles = []
+    for marker in dora_markers:
+        dora = DORA_DORA_MARKERS.get(marker)
+        if dora:
+            dora_tiles.append(dora)
+    return dora_tiles
 
 def melds_to_nl(melds, melds_types) -> str:
     """Format melds (副露) into NL. Each meld can be a list of tile codes or a string.
@@ -150,7 +169,7 @@ def action_to_nl(act) -> str:
     """Convert various action representations to NL-friendly string.
     Handles strings, tuples/lists (e.g. ('dahai','W')), and dicts (e.g. {'type':'dahai','pai':'W'}).
 
-    Special case: for dahai (discard) prefer the short form '打X' (e.g. 打八筒) to match user examples.
+    Special case: for dahai (discard) prefer the short form '打X' (e.g. 打八饼) to match user examples.
     """
     if act is None:
         return '无'
@@ -263,7 +282,8 @@ def explain(game_info, kyoku_info, ai_recommendation: dict, is_3p: bool = False,
     honba = _get(game_info, 'honba', 0)
     kyotaku = _get(game_info, 'kyotaku', 0)
     oya = _get(game_info, 'oya', None)
-    dora_marker = _get(game_info, 'dora_marker', _get(game_info, 'dora', '?'))
+    dora_marker = _get(game_info, 'dora_marker', _get(game_info, 'dora', ['?']))
+    dora = get_dora_from_markers(dora_marker)
 
     # Scores (prefer game_info.scores, otherwise kyoku_info.scores)
     scores = _get(game_info, 'scores', None)
@@ -312,7 +332,7 @@ def explain(game_info, kyoku_info, ai_recommendation: dict, is_3p: bool = False,
     lines.append('你是一个专业的日本麻将高手，擅长分析和解读麻将游戏中的策略和技巧。')
     lines.append('请基于下列牌局快照和AI推荐，简明扼要地解释AI给出概率的原因。')
     lines.append('')
-    header = f'场风: {bakaze_cn}{kyoku}局；本场: {honba}本；供托: {kyotaku}；庄家: {oya+1 if oya is not None else "未知"}位；宝牌: {mjai_to_natural(dora_marker)}。'
+    header = f'场风: {bakaze_cn}{kyoku}局；本场: {honba}本；供托: {kyotaku}；庄家: {oya+1 if oya is not None else "未知"}位；宝牌: {mjai_to_natural(tile_list_to_nl_single(dora))}。'
     if is_3p:
         header += '本局是三人麻将。'
     lines.append(header)
@@ -329,6 +349,7 @@ def explain(game_info, kyoku_info, ai_recommendation: dict, is_3p: bool = False,
     lines.append('场上弃牌（按位）:')
     for i in range(seat_count):
         nm = seat_names[i] if i < len(seat_names) else f'第{i+1}位'
+        nm = nm + '(我)' if i == self_seat else f'第{i+1}位'
         dis_types = disc_type_to_nl(discarded_type[i])
         melds_infos = melds_info_to_nl(melded_info[i])
         print(melds_infos, melded[i])
@@ -344,7 +365,7 @@ def explain(game_info, kyoku_info, ai_recommendation: dict, is_3p: bool = False,
 
     # My hand
     lines.append('')
-    lines.append('我的手牌: ' + (tile_list_to_nl_me(my_tehai) if my_tehai else '未知'))
+    lines.append('我的手牌: ' + (tile_list_to_nl_single(my_tehai) if my_tehai else '未知'))
     lines.append('我摸到: ' + (mjai_to_natural(my_tsumohai) if my_tsumohai else '无'))
 
     # AI recommendation parsing
@@ -406,9 +427,56 @@ def explain(game_info, kyoku_info, ai_recommendation: dict, is_3p: bool = False,
 
     # Instructions for the LLM (concise)
     lines.append('')
-    lines.append('请用简洁的中文输出:')
-    lines.append('牌姿和方向：结合我的手排和当前场上的信息，简述当前我的牌姿和方向（1-2句）')
-    lines.append('选项解释：针对 AI 提供的选项，解释其背后的原因，每项 1-2 句。解释其主要考虑原因，如：进张/改良/期待值/安全等。')
+    lines.append("""基于下面的准则，结合AI给出的概率，分析打各张牌的原因：
+​​一、战略方针制定：明确手牌目标​​
+1.​​差形起手保留可能性​​
+•牌效低时优先保留高潜力役种（国士/全带幺九），而非强推低打点门清。
+•​​关键操作​​：保留8种以上幺九牌时，切低效搭子，维持国士/混全可能性。
+2.终局目标导向​​
+•根据分差选择路线：
+•大差落后​​：切低效牌，保留三色/混一色变化，博高打点。
+•避四局​​：优先安全牌管理，避免放铳。
+​​二、进张效率优化：牌型价值最大化​​
+1.​消除重叠进张​​
+•重叠搭子（如3饼+6饼）优先处理。
+•愚形搭子（边张/坎张）价值低于役牌对子。
+2.​改良空间评估​​
+•中张牌仅能改良为愚形时，优先舍弃。
+•保留一杯口/三色同顺潜力牌，牺牲低价值进张。
+​​三、攻防平衡：安全牌与危险牌管理​​
+1.​危险牌提前处理​​
+•推测对手立直前，切中张危险牌，保留现物安牌。
+•亲家立直时，客风作安牌保留。
+2.​安全度微小差异利用​​
+•进张相近时，选择对特定对手更安全的牌。
+​​四、局势与信息解读​​
+1.​​舍牌信息分析​​
+•对手摸切/手切动作反映安全度。
+•上家手切1索后切2索 → 可能持有4索。
+2.​对手类型针对性应对​​
+•门清型对手：保留安牌。
+•鸣牌型对手：警惕速攻，优先处理对其危险牌。
+​​五、打点与速度权衡​​
+1.​亲家/平场提速​​
+•保留自风（东）摸对后鸣牌加速，打点不逊门清。
+•若役牌非自风（如中），直接切牌追求立直。
+2.​差局博高打点​​
+•四位时：开杠博里宝，保留三色/混一色变化。
+
+​​核心原则​​：何切是风险与回报的动态权衡，需同步评估「手牌潜力」「当前局势」「对手信息」「风格偏好」，而非依赖单一标准。
+                 
+对于AI给出的若干个推荐选项，请你：
+对于每个选项，给出一个词概括AI为什么给出这样的概率。然后用一句简短的话具体分析这个选项的优缺点。
+请用类似于以下的格式输出：
+九万：终盘凹打点；南四局落后较多，需要博高打点，九万打出后可以断幺。
+碰：速攻；自己已经是一位了，碰牌可以加速和牌，不追求打点。
+过：安全牌防守；亲家立直，放铳风险高，自己牌向听数高且打点低，对攻风险大于收益。
+三饼：默听；听的牌是立直家现物，可以偷现。
+八索：立直；默听无役，南场落后，需要打点。
+三万：牌效；三万和六万是重复进张，打出三万不会损失六万的进张。
+吃：牌效；对于四七饼场上已经现出5枚，存量很不乐观，吃牌可以保留和牌可能。
+一万：防守；已经接近尾巡，自己手里没有宝牌且两向听，安全地打出一万可以降低放铳大牌。
+""")
 
     prompt = '\n'.join(lines)
     LOGGER.info("生成的提示语: %s", prompt)

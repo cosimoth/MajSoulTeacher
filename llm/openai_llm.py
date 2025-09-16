@@ -42,4 +42,4 @@ llm_client = AOAILLMClient(
     deployment_name='gpt-4o',
     model_name='gpt-4o',
 )
-llm_client.send_request("", "你是一个专业的日本麻将AI助手。")
+# llm_client.send_request("", "你是一个专业的日本麻将AI助手。")
