@@ -412,6 +412,22 @@ class GameBrowser:
         js_option_title = option_title.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n') if option_title else ''
         js_explanation = explanation.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n') if explanation else ''
 
+        # For explanation, each line begins with the pai to discard or action to take, end with a "：" (Chinese colon).
+        # Then the first part of each line is some simple words explaining the reason, then seperated by a "；" (Chinese semicolon), then followed by more detailed explanation.
+        # We will put the first part in bold, after the options' probability for each option. Then for the rest of the explanation, we will put them after the options, in normal font.
+        explanation_lines = []
+        explanation_reason_map = {}
+        if js_explanation:
+            for para in js_explanation.split('\\n'):
+                if not para:
+                    continue
+                if '：' in para:
+                    pai, rest = para.split('：', 1)
+                    if '；' in rest:
+                        reason, detail = rest.split('；', 1)
+                        explanation_lines.append(pai + '：' + detail)
+                        explanation_reason_map[pai] = ': ' + reason
+
         # Slightly smaller font for explanation
         explanation_font_size = max(int(font_size * 0.9), 12)
 
@@ -432,13 +448,17 @@ class GameBrowser:
             // Measure options and percentages and expand width if needed
             ctx.font = "{font_size}px Arial";
             const options = {options_data};
+            const explanationLines = {explanation_lines};
+            const explanationReasonMap = {explanation_reason_map};
             for (let i = 0; i < options.length; i++) {{
                 const opt = options[i];
                 const optText = opt[0];
                 const optPerc = opt[1];
+                const explanationReason = explanationReasonMap[optText];
                 const wText = ctx.measureText(optText).width;
                 const wPerc = ctx.measureText(optPerc).width;
-                const candidate = wText + wPerc + {font_size}*6; // padding for both sides and gap
+                const wReason = explanationReason ? ctx.measureText(" " + explanationReason).width : 0;
+                const candidate = wText + wPerc + wReason + {font_size}*6; // padding for both sides and gap
                 if (candidate > box_width) {{
                     box_width = candidate;
                 }}
@@ -454,29 +474,27 @@ class GameBrowser:
             const textMaxWidth = box_width - pad*2;
 
             // Wrap explanation into lines based on available width
-            const explanation = "{js_explanation}";
-            const explLines = [];
-            if (explanation) {{
+            let explLines = [];
+            if (explanationLines.length > 0) {{
                 ctx.font = "{explanation_font_size}px Arial";
-                const paras = explanation.split('\\n');
-                paras.forEach(para => {{
-                    if (!para) {{
-                        explLines.push('');
-                        return;
-                    }}
-                    const words = para.split(' ');
-                    let line = '';
-                    for (let wi = 0; wi < words.length; wi++) {{
-                        const w = words[wi];
-                        const testLine = line ? (line + ' ' + w) : w;
-                        if (ctx.measureText(testLine).width > textMaxWidth && line) {{
-                            explLines.push(line);
-                            line = w;
-                        }} else {{
-                            line = testLine;
+                explanationLines.forEach(para => {{
+                    if (ctx.measureText(para).width > textMaxWidth) {{
+                        // If the whole paragraph is too long, split by characters
+                        let line = '';
+                        for (let ci = 0; ci < para.length; ci++) {{
+                            const ch = para[ci];
+                            const testLine = line + ch;
+                            if (ctx.measureText(testLine).width > textMaxWidth && line) {{
+                                explLines.push(line);
+                                line = ch;
+                            }} else {{
+                                line = testLine;
+                            }}
                         }}
+                        if (line) explLines.push(line);
+                    }} else {{
+                        explLines.push(para);
                     }}
-                    if (line) explLines.push(line);
                 }});
             }}
 
@@ -516,9 +534,18 @@ class GameBrowser:
             // Draw each option line
             options.forEach(option => {{
                 const [text, perc] = option;
+                let reason = explanationReasonMap[text];
+                if (!reason) {{
+                    reason = "";
+                }}
                 ctx.fillText(text, {box_left} + pad, yPos); // Draw option text
                 // Draw percentage right-aligned within the box
                 const percWidth = ctx.measureText(perc).width;
+                const textWidth = ctx.measureText(text).width;
+                const reasonWidth = reason ? ctx.measureText(" " + reason).width : 0;
+                if (reason) {{
+                    ctx.fillText(" " + reason, {box_left} + pad + textWidth, yPos);
+                }}
                 ctx.fillText(perc, {box_left} + box_width - pad - percWidth, yPos);
                 yPos += {font_size} + {line_space}; // Adjust yPos for the next line
             }});

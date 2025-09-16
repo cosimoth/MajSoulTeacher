@@ -69,7 +69,6 @@ class GameState:
         #seat 0 is chiicha (起家; first dealer; first East)
         #1-2-3 then goes counter-clockwise        
         self.player_scores:list = None          # player scores
-        print("scores:", self.player_scores)        
         self.kyoku_state:KyokuState = KyokuState()  # kyoku info - cleared every newround        
         
         ### about last reaction
@@ -99,7 +98,9 @@ class GameState:
                 self_reached = self.kyoku_state.self_in_reach,
                 self_seat = self.seat,
                 player_reached = self.kyoku_state.player_reach.copy(),
-                is_first_round = self.kyoku_state.first_round,                
+                is_first_round = self.kyoku_state.first_round,
+                oya = (self.kyoku_state.kyoku -1)%4,
+                dora_marker = self.kyoku_state.doras_ms.copy()                
             )
             return gi
         else:   # if game not started: None
@@ -277,10 +278,6 @@ class GameState:
         self.kyoku_state = KyokuState()
         # clear kyoku info of last round
         self.kyoku_state.kyoku_info = KyokuInfo()
-        print("new round")
-        print(self.kyoku_state.kyoku_info.discarded)
-        print(self.kyoku_state.kyoku_info.melded)
-        print(self.kyoku_state.kyoku_info.scores)
         self.mjai_pending_input_msgs = []
 
         liqi_data_data = liqi_data['data']
