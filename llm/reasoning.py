@@ -386,19 +386,6 @@ def explain(game_info, kyoku_info, ai_recommendation: dict, is_3p: bool = False,
             return f' ({pv:.1f}%)'
         return f' ({pv})'
 
-    lines.append('')
-    lines.append(f'AI 推荐:')
-    if options:
-        for idx, (act, prob) in enumerate(options[:top_k]):
-            lines.append(f'{idx+1}. {action_to_nl(act)}{_fmt_prob(prob)}')
-    else:
-        # fallback: attempt to show top-level ai_recommendation fields
-        if isinstance(ai_recommendation, dict) and 'type' in ai_recommendation:
-            desc = action_to_nl(ai_recommendation)
-            prob = ai_recommendation.get('prob')
-            lines.append('1. ' + desc + _fmt_prob(prob))
-        else:
-            lines.append('无可解析的推荐')
 
     # Meta summary (helpful for LLM reasoning)
     meta = None
@@ -413,6 +400,8 @@ def explain(game_info, kyoku_info, ai_recommendation: dict, is_3p: bool = False,
         for k in ('shanten', 'at_furiten', 'is_greedy', 'eval_time_ns', 'batch_size'):
             if k in meta:
                 meta_lines.append(f'{k}: {meta.get(k)}')
+                if k == 'shanten':
+                    lines.append(f'当前向听数: {meta.get(k)}')
         # q_values top-3 by value (show indices + values) if available
         qv = meta.get('q_values')
         if isinstance(qv, (list, tuple)) and len(qv) > 0:
@@ -425,17 +414,42 @@ def explain(game_info, kyoku_info, ai_recommendation: dict, is_3p: bool = False,
         #     lines.append('')
         #     lines.append('AI meta: ' + '；'.join(meta_lines))
 
+    lines.append('')
+    lines.append(f'AI 推荐:')
+    if options:
+        for idx, (act, prob) in enumerate(options[:top_k]):
+            lines.append(f'{idx+1}. {action_to_nl(act)}{_fmt_prob(prob)}')
+    else:
+        # fallback: attempt to show top-level ai_recommendation fields
+        if isinstance(ai_recommendation, dict) and 'type' in ai_recommendation:
+            desc = action_to_nl(ai_recommendation)
+            prob = ai_recommendation.get('prob')
+            lines.append('1. ' + desc + _fmt_prob(prob))
+        else:
+            lines.append('无可解析的推荐')
     # Instructions for the LLM (concise)
     lines.append('')
-    lines.append("""
-​​核心原则​​：何切是风险与回报的动态权衡，需同步评估「手牌潜力」「当前局势」「对手信息」「风格偏好」，而非依赖单一标准。
+    lines.append("""核心原则​​：何切是风险与回报的动态权衡，需同步评估「手牌潜力」「当前局势」「对手信息」「风格偏好」，而非依赖单一标准。
+                 
+你可以参考以下几个方面来思考为什么AI会推荐打掉这些牌：
+1. 牌效与进张：考虑打掉的牌是否提升了手牌的整体效率和进张机会，是否会降低向听数。
+2. 役种与打点：评估打掉的牌是否有助于达成特定的役种，是否影响最终的打点。
+3. 安全性与防守：分析打掉的牌是否是安全牌，是否有助于降低放铳风险。注意：这个考量往往在对手立直或局势紧张时更为重要，在早巡一般不会考虑。
+4. 防守与对攻：如果对手已经立直，评估打掉的牌是否安全，是否可能被对手和了。需要考虑自己牌的价值。如果自己的牌很大且已经听牌，可能会选择冒险打出一些不太安全的牌以追求和牌；如果自己的牌较小且未听牌，可能会更倾向于打出安全牌以防止放铳。
+5. 听牌质量：如果打掉的牌能让手牌进入听牌状态，评估听牌的质量（如听牌数、役种、打点）。
+6. 局势与对手：结合当前的局势（如分数、剩余牌数、对手状态）来判断打掉的牌是否符合整体战略。如果处于领先位置，可能更倾向于保守打法；如果落后，可能需要冒险追求高打点。
+7. 立直与默听：如果听牌且无役，且局势需要打点，一般会选择立直。但如果听的太差（如山里最多只有一枚），可以等待改良。如果听牌有役，且局势允许，可以选择默听以追求更高和率。
+8. 和牌与见逃：如果已经听牌，如果是All Last，需要评估是否荣和牌或自摸后能逆转顺位或避四。如果不是All Last，一般会选择和牌以结束局面，除非确定可以拿到更多的流局听牌罚符。
 
-对于AI给出的若干个推荐打掉的牌，请你：
-对于每张推荐打掉的牌，给出一个词概括AI为什么决定打出这张牌。然后用一句简短的话具体分析打出这张牌的好处和坏处。
+对于AI给出的若干个推荐打掉的牌或做出的鸣/荣/自摸决定，请你：
+对于每个动作，给出一个词概括AI为什么决定这样做。然后用一句简短的话具体分析打出/鸣/和这张牌的好处和坏处。
 请用类似于以下的格式输出：
 牌：原因；具体分析。
                  
 其中牌为AI推荐打出的牌，原因是个词，具体分析为一句简短的话具体分析打出这张牌的好处和坏处。
+如：
+九万：牌效；早巡九万孤张且进张差，打出可提升整体牌效。
+碰：速攻；碰牌加速和牌进程，由于处于领先位置，所以可以快速过庄。
 """)
 
     prompt = '\n'.join(lines)
