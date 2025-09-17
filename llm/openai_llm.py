@@ -37,9 +37,14 @@ class AOAILLMClient:
         response = self.llm.invoke(messages)  
         return response.content
 
+# llm_client = AOAILLMClient(
+#     openai_account='calendarai-ds-sc',
+#     deployment_name='gpt-4o',
+#     model_name='gpt-4o',
+# )
 llm_client = AOAILLMClient(
     openai_account='calendarai-ds-sc',
-    deployment_name='gpt-4o',
-    model_name='gpt-4o',
+    deployment_name='gpt-4.1',
+    model_name='gpt-4.1',
 )
 # llm_client.send_request("", "你是一个专业的日本麻将AI助手。")
